@@ -29,7 +29,10 @@ public class SecurityConfig {
                         // Allow all CORS preflight OPTIONS requests without auth
                         .requestMatchers(org.springframework.http.HttpMethod.OPTIONS, "/**").permitAll()
 
+                        // Public endpoints: Root, Health check, Auth, Error, and Swagger Docs
+                        .requestMatchers("/", "/health", "/api/health", "/error").permitAll()
                         .requestMatchers("/api/auth/**").permitAll()
+                        .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
 
                         // All admin endpoints — both Super Admin & Community Admin
                         .requestMatchers("/api/admin/**")
