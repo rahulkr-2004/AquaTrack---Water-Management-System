@@ -78,6 +78,7 @@ public class OnboardingService {
      * Called on application startup to permanently drop legacy/orphaned tables
      * that were created under old schema names (e.g. 'tickets' -> now 'support_tickets').
      */
+    @Transactional
     public void dropLegacyTables() {
         try {
             try {
