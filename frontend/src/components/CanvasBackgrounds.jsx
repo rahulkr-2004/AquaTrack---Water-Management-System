@@ -1,10 +1,29 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+
+// Helper hook to disable CPU/GPU heavy canvas physics on mobile devices
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(() => {
+    return typeof window !== 'undefined' ? window.innerWidth < 768 : false;
+  });
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  return isMobile;
+}
 
 // WATER GRID NETWORK BACKGROUND ANIMATION
 export function WaterGridCanvas() {
+  const isMobile = useIsMobile();
   const canvasRef = useRef(null);
 
   useEffect(() => {
+    if (isMobile) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
@@ -20,7 +39,7 @@ export function WaterGridCanvas() {
     };
     window.addEventListener('resize', handleResize);
 
-    const particleCount = window.innerWidth < 640 ? 10 : 35;
+    const particleCount = 28;
     const particles = [];
 
     for (let i = 0; i < particleCount; i++) {
@@ -43,8 +62,8 @@ export function WaterGridCanvas() {
         for (let j = i + 1; j < particleCount; j++) {
           const p2 = particles[j];
           const dist = Math.hypot(p1.x - p2.x, p1.y - p2.y);
-          if (dist < 120) {
-            const alpha = (1 - dist / 120) * 0.18;
+          if (dist < 110) {
+            const alpha = (1 - dist / 110) * 0.16;
             ctx.strokeStyle = `rgba(56, 189, 248, ${alpha})`;
             ctx.beginPath();
             ctx.moveTo(p1.x, p1.y);
@@ -80,7 +99,9 @@ export function WaterGridCanvas() {
       window.removeEventListener('resize', handleResize);
       cancelAnimationFrame(animationFrameId);
     };
-  }, []);
+  }, [isMobile]);
+
+  if (isMobile) return null;
 
   return (
     <canvas
@@ -91,9 +112,11 @@ export function WaterGridCanvas() {
 }
 
 export function BubblesCanvas() {
+  const isMobile = useIsMobile();
   const canvasRef = useRef(null);
 
   useEffect(() => {
+    if (isMobile) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
@@ -109,7 +132,7 @@ export function BubblesCanvas() {
     };
     window.addEventListener('resize', handleResize);
 
-    const bubbleCount = window.innerWidth < 640 ? 8 : 25;
+    const bubbleCount = 20;
     const bubbles = [];
 
     for (let i = 0; i < bubbleCount; i++) {
@@ -159,7 +182,9 @@ export function BubblesCanvas() {
       window.removeEventListener('resize', handleResize);
       cancelAnimationFrame(animationFrameId);
     };
-  }, []);
+  }, [isMobile]);
+
+  if (isMobile) return null;
 
   return (
     <canvas
@@ -170,9 +195,11 @@ export function BubblesCanvas() {
 }
 
 export function RaindropsCanvas() {
+  const isMobile = useIsMobile();
   const canvasRef = useRef(null);
 
   useEffect(() => {
+    if (isMobile) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
@@ -188,7 +215,7 @@ export function RaindropsCanvas() {
     };
     window.addEventListener('resize', handleResize);
 
-    const dropCount = window.innerWidth < 640 ? 12 : 45;
+    const dropCount = 35;
     const drops = [];
 
     for (let i = 0; i < dropCount; i++) {
@@ -234,7 +261,9 @@ export function RaindropsCanvas() {
       window.removeEventListener('resize', handleResize);
       cancelAnimationFrame(animationFrameId);
     };
-  }, []);
+  }, [isMobile]);
+
+  if (isMobile) return null;
 
   return (
     <canvas

@@ -120,16 +120,12 @@ body {
   font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
 }
 
-/* ── Theme Transitions (structural elements) ──── */
-body,
-header, aside, main, nav, section, footer,
-button, a,
-input, select, textarea {
+/* ── Theme Transitions (interactive elements only for smooth mobile performance) ──── */
+button, a {
   transition:
-    background-color 0.25s ease,
-    border-color     0.25s ease,
-    color            0.25s ease,
-    box-shadow       0.25s ease;
+    background-color 0.2s ease,
+    border-color     0.2s ease,
+    color            0.2s ease;
 }
 
 .animate-spin,
@@ -477,16 +473,23 @@ html[data-theme="dark"] .btn-liquid-secondary:hover {
 .liquid-blob {
   position: absolute;
   border-radius: 50%;
-  filter: blur(90px);
+  filter: blur(80px);
   opacity: 0.45;
   pointer-events: none;
   z-index: 0;
   animation: float-blob 25s infinite alternate ease-in-out;
 }
 
+/* Hide intensive background blur animations on mobile for 60fps performance */
+@media (max-width: 768px), (prefers-reduced-motion: reduce) {
+  .liquid-blob {
+    display: none !important;
+  }
+}
+
 html[data-theme="dark"] .liquid-blob {
   opacity: 0.18;
-  filter: blur(110px);
+  filter: blur(90px);
 }
 
 .blob-blue {
@@ -535,11 +538,8 @@ html[data-theme="dark"] .liquid-blob {
    cyan/blue glow effects, and ultra-crisp contrast. */
 
 html[data-theme="dark"] .bg-slate-800 {
-  background: rgba(13, 22, 38, 0.75) !important;
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  background-color: #0d1626 !important;
   border-color: rgba(56, 189, 248, 0.15) !important;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), 0 0 15px rgba(6, 182, 212, 0.08);
 }
 
 html[data-theme="dark"] .border-red-500\/50 {
@@ -602,22 +602,19 @@ html[data-theme="dark"] button {
               border-color 0.22s ease;
 }
 
-/* Cards that wrap content — subtle lift on hover */
-.border.rounded-xl,
-.border.rounded-2xl {
-  will-change: transform;
-}
+/* Cards that wrap content — subtle lift on desktop hover only */
+@media (hover: hover) and (pointer: fine) {
+  .border.rounded-xl:hover,
+  .border.rounded-2xl:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.08);
+  }
 
-.border.rounded-xl:hover,
-.border.rounded-2xl:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.08);
-}
-
-html[data-theme="dark"] .border.rounded-xl:hover,
-html[data-theme="dark"] .border.rounded-2xl:hover {
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.55),
-              0 0 0 1px rgba(255, 255, 255, 0.05);
+  html[data-theme="dark"] .border.rounded-xl:hover,
+  html[data-theme="dark"] .border.rounded-2xl:hover {
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.55),
+                0 0 0 1px rgba(255, 255, 255, 0.05);
+  }
 }
 
 /* ── Premium Button Styles ─────────────────────── */
@@ -631,26 +628,10 @@ a.bg-blue-600 {
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-button.bg-blue-600:hover,
-button.bg-blue-500:hover,
-button.bg-indigo-600:hover,
-a.bg-blue-600:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(59, 130, 246, 0.55);
-  filter: brightness(1.08);
-}
-
 button.bg-emerald-600,
 button.bg-green-600 {
   box-shadow: 0 2px 12px rgba(16, 185, 129, 0.3);
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-button.bg-emerald-600:hover,
-button.bg-green-600:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(16, 185, 129, 0.5);
-  filter: brightness(1.08);
 }
 
 button.bg-red-600,
@@ -659,42 +640,59 @@ button.bg-rose-600 {
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-button.bg-red-600:hover,
-button.bg-rose-600:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(239, 68, 68, 0.5);
-  filter: brightness(1.08);
-}
-
 button.bg-amber-600,
 button.bg-amber-500 {
   box-shadow: 0 2px 12px rgba(245, 158, 11, 0.3);
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-button.bg-amber-600:hover,
-button.bg-amber-500:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(245, 158, 11, 0.5);
-  filter: brightness(1.1);
-}
-
-/* Outline / ghost buttons */
 button.border.border-slate-700,
 button.border.border-slate-800 {
   transition: all 0.2s ease;
 }
 
-button.border.border-slate-700:hover,
-button.border.border-slate-800:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
-}
+@media (hover: hover) and (pointer: fine) {
+  button.bg-blue-600:hover,
+  button.bg-blue-500:hover,
+  button.bg-indigo-600:hover,
+  a.bg-blue-600:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(59, 130, 246, 0.55);
+    filter: brightness(1.08);
+  }
 
-html[data-theme="dark"] button.border.border-slate-700:hover,
-html[data-theme="dark"] button.border.border-slate-800:hover {
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5),
-              0 0 0 1px rgba(255,255,255,0.06);
+  button.bg-emerald-600:hover,
+  button.bg-green-600:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(16, 185, 129, 0.5);
+    filter: brightness(1.08);
+  }
+
+  button.bg-red-600:hover,
+  button.bg-rose-600:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(239, 68, 68, 0.5);
+    filter: brightness(1.08);
+  }
+
+  button.bg-amber-600:hover,
+  button.bg-amber-500:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(245, 158, 11, 0.5);
+    filter: brightness(1.1);
+  }
+
+  button.border.border-slate-700:hover,
+  button.border.border-slate-800:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+  }
+
+  html[data-theme="dark"] button.border.border-slate-700:hover,
+  html[data-theme="dark"] button.border.border-slate-800:hover {
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5),
+                0 0 0 1px rgba(255,255,255,0.06);
+  }
 }
 
 /* Active/pressed feedback for all buttons */

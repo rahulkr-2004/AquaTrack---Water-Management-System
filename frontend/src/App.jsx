@@ -124,7 +124,11 @@ function HeaderNotificationBell({ token, setActiveTab, showMessage, t, isManager
 
   useEffect(() => {
     fetchNotifications();
-    const interval = setInterval(fetchNotifications, 5000);
+    const interval = setInterval(() => {
+      if (typeof document === 'undefined' || document.visibilityState === 'visible') {
+        fetchNotifications();
+      }
+    }, 15000);
     return () => clearInterval(interval);
   }, [token]);
 
@@ -7215,7 +7219,11 @@ function AlertsTab({ token, households, showMessage, isAdmin, onUpdate, fetchDas
 
   useEffect(() => {
     fetchAlerts();
-    const interval = setInterval(() => fetchAlerts(true), 5000);
+    const interval = setInterval(() => {
+      if (typeof document === 'undefined' || document.visibilityState === 'visible') {
+        fetchAlerts(true);
+      }
+    }, 15000);
     return () => clearInterval(interval);
   }, []);
 
