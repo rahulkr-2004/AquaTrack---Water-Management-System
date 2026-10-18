@@ -43,11 +43,11 @@ public class Invitation {
     private String flatNumber;
 
     @Lob
-    @Column(name = "document_aadhar", columnDefinition = "LONGTEXT")
+    @Column(name = "document_aadhar", columnDefinition = "TEXT")
     private String documentAadhar;
 
     @Lob
-    @Column(name = "document_photo", columnDefinition = "LONGTEXT")
+    @Column(name = "document_photo", columnDefinition = "TEXT")
     private String documentPhoto;
 
     @Column(name = "gender", length = 20)

@@ -25,7 +25,7 @@ public class SupportTicket {
     private String description;
 
     @Lob
-    @Column(columnDefinition = "LONGTEXT")
+    @Column(columnDefinition = "TEXT")
     private String attachment;
 
     @Column(nullable = false)

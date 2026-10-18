@@ -30,6 +30,9 @@ public class WaterApplication {
 			com.water.water.service.DemoDataSeeder demoDataSeeder) {
 		return args -> java.util.concurrent.CompletableFuture.runAsync(() -> {
 			try {
+				// Wait briefly for Hibernate ddl-auto schema creation to complete
+				Thread.sleep(1500);
+
 				List<User> users = userRepository.findAll();
 				for (User user : users) {
 					if (!user.isApproved()) {
