@@ -8,10 +8,14 @@ import org.springframework.stereotype.Service;
 @Service
 public class EmailService {
 
-    @Autowired
+    @Autowired(required = false)
     private JavaMailSender mailSender;
 
     public void sendEmail(String to, String subject, String body) {
+        if (mailSender == null) {
+            System.out.println("Mail sender not configured, skipping email to: " + to);
+            return;
+        }
         try {
             SimpleMailMessage message = new SimpleMailMessage();
             message.setFrom("aceruser12003@gmail.com");

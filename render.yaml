@@ -11,3 +11,21 @@ services:
         value: prod
       - key: JWT_SECRET
         generateValue: true
+
+  - type: web
+    name: aquatrack-frontend
+    env: static
+    plan: free
+    buildCommand: npm --prefix frontend install && npm --prefix frontend run build
+    staticPublishPath: ./frontend/dist
+    autoDeploy: true
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: VITE_API_BASE_URL
+        fromService:
+          type: web
+          name: aquatrack-backend
+          property: host

@@ -12,6 +12,8 @@ public interface WaterUsageLogRepository extends JpaRepository<WaterUsageLog, Lo
     // The Brains will use this to prevent duplicate daily entries
     boolean existsByHouseholdIdAndDate(Long householdId, LocalDate date);
 
+    java.util.Optional<WaterUsageLog> findByHouseholdIdAndDate(Long householdId, LocalDate date);
+
     // The Brains will use this to find yesterday's reading so it can calculate today's consumption
     WaterUsageLog findTopByHouseholdIdOrderByDateDesc(Long householdId);
 

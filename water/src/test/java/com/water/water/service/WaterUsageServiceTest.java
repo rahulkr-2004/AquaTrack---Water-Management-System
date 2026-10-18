@@ -14,6 +14,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mock.web.MockMultipartFile;
 
 import java.time.LocalDate;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 
@@ -129,11 +130,14 @@ public class WaterUsageServiceTest {
         MockMultipartFile file = new MockMultipartFile("file", "test.csv", "text/csv", csvData.getBytes());
 
         when(householdRepository.findById(1L)).thenReturn(Optional.of(mockHousehold));
-        when(waterUsageLogRepository.existsByHouseholdIdAndDate(eq(1L), any(LocalDate.class))).thenReturn(false);
-        when(waterUsageLogRepository.findTopByHouseholdIdOrderByDateDesc(1L)).thenReturn(null);
+        when(waterUsageLogRepository.findByHouseholdIdAndDate(eq(1L), any(LocalDate.class))).thenReturn(Optional.empty());
 
         WaterUsageLog savedLog = new WaterUsageLog();
+        savedLog.setHousehold(mockHousehold);
+        savedLog.setDate(LocalDate.parse("2023-10-01"));
+        savedLog.setReadingLiters(150.5);
         when(waterUsageLogRepository.save(any(WaterUsageLog.class))).thenReturn(savedLog);
+        when(waterUsageLogRepository.findAllByOrderByDateDesc()).thenReturn(Collections.emptyList());
 
         List<WaterUsageLog> results = waterUsageService.processBulkCsvUpload(file);
         assertEquals(1, results.size());

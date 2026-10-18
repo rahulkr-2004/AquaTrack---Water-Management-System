@@ -143,9 +143,7 @@ public class WaterUsageService {
                     double readingLiters = Double.parseDouble(readingValStr);
 
                     // Check if log already exists for this household and date
-                    WaterUsageLog existingLog = waterUsageLogRepository.findAll().stream()
-                            .filter(l -> l.getHousehold() != null && l.getHousehold().getId().equals(householdId) && l.getDate().equals(date))
-                            .findFirst().orElse(null);
+                    WaterUsageLog existingLog = waterUsageLogRepository.findByHouseholdIdAndDate(householdId, date).orElse(null);
 
                     if (existingLog != null) {
                         existingLog.setReadingLiters(readingLiters);
@@ -372,7 +370,10 @@ public class WaterUsageService {
         LocalDate endDate = LocalDate.of(2026, 8, 3);
 
         List<WaterUsageLog> existing = waterUsageLogRepository.findByHouseholdIdOrderByDateDesc(household.getId());
-        if (!existing.isEmpty()) {
+        if (existing != null && existing.size() >= 100) {
+            return "Meter readings for Harsh already initialized (" + existing.size() + " logs).";
+        }
+        if (existing != null && !existing.isEmpty()) {
             waterUsageLogRepository.deleteAll(existing);
         }
 
@@ -444,7 +445,7 @@ public class WaterUsageService {
             byHousehold.computeIfAbsent(hhId, k -> new java.util.ArrayList<>()).add(log);
         }
 
-        int fixedCount = 0;
+        List<WaterUsageLog> toUpdate = new java.util.ArrayList<>();
         for (java.util.Map.Entry<Long, java.util.List<WaterUsageLog>> entry : byHousehold.entrySet()) {
             java.util.List<WaterUsageLog> logs = entry.getValue();
             // Sort ASC by date then id
@@ -462,12 +463,16 @@ public class WaterUsageService {
                     double prev = logs.get(i - 1).getReadingLiters();
                     consumption = Math.max(0.0, log.getReadingLiters() - prev);
                 }
-                log.setConsumptionLiters(consumption);
-                waterUsageLogRepository.save(log);
-                fixedCount++;
+                if (log.getConsumptionLiters() == null || Math.abs(log.getConsumptionLiters() - consumption) > 0.001) {
+                    log.setConsumptionLiters(consumption);
+                    toUpdate.add(log);
+                }
             }
         }
-        return fixedCount;
+        if (!toUpdate.isEmpty()) {
+            waterUsageLogRepository.saveAll(toUpdate);
+        }
+        return toUpdate.size();
     }
 
     public List<java.util.Map<String, Object>> getApartmentLeaderboard(String email) {

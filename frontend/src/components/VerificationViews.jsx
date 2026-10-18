@@ -22,7 +22,7 @@ import {
 } from 'lucide-react';
 import { WaterGridCanvas, BubblesCanvas } from './CanvasBackgrounds';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || (typeof window !== 'undefined' ? `http://${window.location.hostname}:8080` : 'http://localhost:8080');
+import API_BASE_URL from '../config/api';
 
 export function InviteVerificationView({ inviteToken, showMessage, darkMode, toggleDarkMode }) {
   const [formData, setFormData] = useState({ gender: 'Male', mobileNo: '', alternateNo: '' });
