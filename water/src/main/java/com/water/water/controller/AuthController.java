@@ -28,6 +28,7 @@ import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.HashMap;
 import java.util.List;
@@ -106,9 +107,19 @@ public class AuthController {
             return ResponseEntity.badRequest().body("Error: Residents must be invited by a Community Admin.");
         }
 
-        // 2. Email uniqueness
-        if (request.getEmail() != null && userRepository.existsByEmail(request.getEmail().toLowerCase().trim())) {
-            return ResponseEntity.badRequest().body("Error: Email is already in use!");
+        // 2. Email uniqueness check / resume incomplete registration
+        User existingUser = null;
+        if (request.getEmail() != null) {
+            existingUser = userRepository.findByEmail(request.getEmail().toLowerCase().trim()).orElse(null);
+            if (existingUser != null) {
+                // If it's an unapproved Community Admin who never completed document upload, allow resuming/updating
+                boolean isIncompleteCommunityAdmin = existingUser.getRole() == Role.ROLE_COMMUNITY_ADMIN
+                        && !existingUser.isApproved()
+                        && (existingUser.getDocumentAadhar() == null || existingUser.getDocumentPhoto() == null);
+                if (!isIncompleteCommunityAdmin) {
+                    return ResponseEntity.badRequest().body("Error: Email is already in use!");
+                }
+            }
         }
 
         // 3. Username uniqueness (if provided)
@@ -117,13 +128,14 @@ public class AuthController {
             if (!uname.matches("^[a-zA-Z0-9_\\.]+$")) {
                 return ResponseEntity.badRequest().body("Error: Username can only contain letters, numbers, underscores and dots.");
             }
-            if (userRepository.existsByUsername(uname)) {
+            User byUname = userRepository.findByUsername(uname).orElse(null);
+            if (byUname != null && (existingUser == null || !byUname.getId().equals(existingUser.getId()))) {
                 return ResponseEntity.badRequest().body("Error: Username is already taken.");
             }
         }
 
-        // 4. Create user
-        User user = new User();
+        // 4. Create or update user
+        User user = existingUser != null ? existingUser : new User();
         user.setName(request.getName().trim());
         user.setEmail(request.getEmail().toLowerCase().trim());
         if (request.getUsername() != null && !request.getUsername().isBlank()) {
@@ -171,9 +183,9 @@ public class AuthController {
 
         userRepository.save(user);
 
-        // 8. Community Admin: return userId and user details for document upload step
+        // 8. Return JSON response for both Community Admin and Super Admin
+        Map<String, Object> resp = new HashMap<>();
         if ("ROLE_COMMUNITY_ADMIN".equalsIgnoreCase(request.getRole())) {
-            Map<String, Object> resp = new HashMap<>();
             resp.put("message", "Registration created! Please upload your verification documents to complete submission.");
             resp.put("requiresApproval", true);
             resp.put("userId", user.getId());
@@ -182,13 +194,19 @@ public class AuthController {
             return ResponseEntity.ok(resp);
         }
 
-        return ResponseEntity.ok("User registered successfully!");
+        resp.put("message", "User registered successfully!");
+        resp.put("requiresApproval", false);
+        resp.put("userId", user.getId());
+        resp.put("email", user.getEmail());
+        resp.put("username", user.getUsername());
+        return ResponseEntity.ok(resp);
     }
 
     // ──────────────────────────────────────────────────────────────────────────
     // COMMUNITY ADMIN DOCUMENT VERIFICATION
     // ──────────────────────────────────────────────────────────────────────────
     @PostMapping("/verify-admin-docs")
+    @Transactional
     public ResponseEntity<?> verifyAdminDocs(@RequestBody Map<String, String> request) {
         try {
             String userIdStr = request.get("userId");
@@ -296,6 +314,7 @@ public class AuthController {
     // INVITATION VERIFICATION
     // ──────────────────────────────────────────────────────────────────────────
     @PostMapping("/verify-invitation")
+    @Transactional
     public ResponseEntity<?> verifyInvitation(@RequestBody Map<String, String> request) {
         String token = request.get("token");
         String aadharBase64 = request.get("documentAadhar");
@@ -355,6 +374,7 @@ public class AuthController {
     // REGISTER FROM INVITATION
     // ──────────────────────────────────────────────────────────────────────────
     @PostMapping("/register-invited")
+    @Transactional
     public ResponseEntity<?> registerInvited(@RequestBody Map<String, String> request) {
         String token = request.get("token");
         String password = request.get("password");
@@ -367,7 +387,7 @@ public class AuthController {
                 inv.setToken(token);
                 inv.setName("Harsh");
                 inv.setEmail("rahulamp2004@gmail.com");
-                inv.setBlock("5");
+                inv.setBlock("Block 5");
                 inv.setFlatNumber("609");
                 inv.setStatus("VERIFIED");
                 
@@ -402,20 +422,49 @@ public class AuthController {
             }
         }
 
+        // Resolve apartment safely
+        Apartment apt = inv.getApartment();
+        if (apt == null) {
+            apt = apartmentRepository.findAll().stream().findFirst().orElse(null);
+            if (apt == null) {
+                Apartment newApt = new Apartment();
+                newApt.setName("Main Colony");
+                newApt.setAddress("City Center");
+                apt = apartmentRepository.save(newApt);
+            }
+            inv.setApartment(apt);
+            inv = invitationRepository.save(inv);
+        }
+        final Apartment finalApt = apt;
         final Invitation finalInv = inv;
-        // Find or create Household
-        Household hh = householdRepository.findByApartmentIdAndBlockAndFlatNumber(
-            inv.getApartment().getId(), inv.getBlock(), inv.getFlatNumber()
+        
+        // Find existing household flexibly or create a new one, establishing proper Building link
+        Household hh = householdRepository.findFlexible(
+            finalApt.getId(), inv.getBlock(), inv.getFlatNumber()
         ).orElseGet(() -> {
-            Apartment apt = finalInv.getApartment();
-            if (apt == null) throw new IllegalArgumentException("Colony not found");
             Household newHh = new Household();
-            newHh.setApartment(apt);
-            newHh.setBlock(finalInv.getBlock());
+            newHh.setApartment(finalApt);
+            Building b = buildingRepository.findByNameFlexible(finalInv.getBlock(), finalApt.getId()).orElse(null);
+            if (b != null) {
+                newHh.setBuilding(b);
+                newHh.setBlock(b.getName());
+            } else {
+                newHh.setBlock(finalInv.getBlock());
+            }
             newHh.setFlatNumber(finalInv.getFlatNumber());
             newHh.setHasMeter(true);
             return householdRepository.save(newHh);
         });
+
+        // Ensure building is attached if not already set on existing household
+        if (hh.getBuilding() == null) {
+            Building b = buildingRepository.findByNameFlexible(hh.getBlock(), finalApt.getId()).orElse(null);
+            if (b != null) {
+                hh.setBuilding(b);
+                hh.setBlock(b.getName());
+                hh = householdRepository.save(hh);
+            }
+        }
 
         // Create User
         User user = new User();
@@ -433,6 +482,20 @@ public class AuthController {
         user.setMobileNo(inv.getMobileNo());
         user.setWhatsappNo(inv.getAlternateNo()); // alternateNo field stored whatsapp during invite verify
         user.setHousehold(hh);
+
+        // Auto-link resident to Community Admin managing this building or colony
+        final Household assignedHh = hh;
+        User adminForBlock = userRepository.findAll().stream()
+            .filter(u -> u.getRole() == Role.ROLE_COMMUNITY_ADMIN && u.isApproved()
+                && u.getManagedApartment() != null && u.getManagedApartment().getId().equals(finalApt.getId())
+                && (u.getManagedBuilding() == null
+                    || u.getManagedBuilding().getName().equalsIgnoreCase(assignedHh.getBlock())
+                    || u.getManagedBuilding().getName().replaceAll("(?i)Block\\s*", "").equalsIgnoreCase(assignedHh.getBlock().replaceAll("(?i)Block\\s*", ""))))
+            .findFirst().orElse(null);
+        if (adminForBlock != null) {
+            user.setManagedByAdmin(adminForBlock);
+        }
+
         userRepository.save(user);
 
         inv.setStatus("REGISTERED");
@@ -441,9 +504,10 @@ public class AuthController {
         // Notify Community Admin and Super Admin
         SystemAlert alert = new SystemAlert();
         alert.setHousehold(hh);
+        alert.setTargetUser(user);
         alert.setTitle("New Resident Registration");
         alert.setMessage("Resident " + inv.getName() + " has completed registration for Block " +
-                inv.getBlock() + ", Flat " + inv.getFlatNumber() + ". Please review their KYC documents.");
+                hh.getBlock() + ", Flat " + inv.getFlatNumber() + ". Please review their KYC documents.");
         alert.setDate(java.time.LocalDate.now());
         alert.setType("REGISTRATION");
         alert.setResolved(false);

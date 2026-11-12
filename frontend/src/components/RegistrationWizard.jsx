@@ -295,6 +295,9 @@ export default function RegistrationWizard({ showMessage, onSwitchToLogin, darkM
               </button>
             ))}
           </div>
+          <div className="text-[11px] text-slate-500 dark:text-slate-400 bg-sky-50 dark:bg-sky-950/30 border border-sky-200 dark:border-sky-800/40 rounded-xl px-3 py-2 leading-relaxed">
+            💡 <strong className="text-slate-700 dark:text-slate-200">Are you a resident/flat owner?</strong> Residents join via an invite link sent by their Community Admin.
+          </div>
 
           <InputField icon={User} placeholder="Full Name" required value={name} onChange={e => setName(e.target.value)} />
           <InputField icon={Mail} type="email" placeholder="Email Address" required value={email} onChange={e => setEmail(e.target.value)} />

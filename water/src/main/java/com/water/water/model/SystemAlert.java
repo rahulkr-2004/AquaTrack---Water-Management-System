@@ -4,11 +4,14 @@ import jakarta.persistence.*;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
+import lombok.ToString;
+import lombok.EqualsAndHashCode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.Set;
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 @Data
 @NoArgsConstructor
@@ -23,10 +26,15 @@ public class SystemAlert {
 
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "household_id")
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
     private Household household; // Can be null for general/building-wide alerts
 
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "target_user_id")
+    @JsonIgnoreProperties({"password", "managedByAdmin", "managedApartment", "managedBuilding", "household", "documentAadhar", "documentPhoto"})
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
     private User targetUser; // Specific user this alert is for (if any)
 
     @Column(nullable = false)
@@ -73,6 +81,8 @@ public class SystemAlert {
         joinColumns = @JoinColumn(name = "alert_id"),
         inverseJoinColumns = @JoinColumn(name = "user_id")
     )
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
     private Set<User> readByUsers = new HashSet<>();
 
     @JsonIgnore
@@ -82,5 +92,7 @@ public class SystemAlert {
         joinColumns = @JoinColumn(name = "alert_id"),
         inverseJoinColumns = @JoinColumn(name = "user_id")
     )
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
     private Set<User> clearedByUsers = new HashSet<>();
 }

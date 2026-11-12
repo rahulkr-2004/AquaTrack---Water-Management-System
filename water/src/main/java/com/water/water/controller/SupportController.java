@@ -20,7 +20,6 @@ import java.util.Optional;
 
 @RestController
 @RequestMapping("/api/support")
-@CrossOrigin(origins = "*")
 public class SupportController {
 
     @Autowired
@@ -54,40 +53,58 @@ public class SupportController {
 
     @PostMapping("/tickets")
     public ResponseEntity<?> createTicket(@RequestBody SupportTicket ticket) {
-        User user = getAuthenticatedUser();
-        if (user == null) return ResponseEntity.status(401).body("Unauthorized");
-
-        ticket.setRaisedBy(user);
-        
-        if (user.getRole() == Role.ROLE_USER) {
-            ticket.setAssignedTo(user.getManagedByAdmin());
-        } else if (user.getRole() == Role.ROLE_COMMUNITY_ADMIN) {
-            List<User> superAdmins = userRepository.findByRole(Role.ROLE_ADMIN);
-            if (!superAdmins.isEmpty()) {
-                ticket.setAssignedTo(superAdmins.get(0));
-            }
-        }
-        
-        ticket.setStatus("OPEN");
-        SupportTicket savedTicket = supportTicketRepository.save(ticket);
-
-        // Generate Notification / System Alert for new support ticket
         try {
-            SystemAlert alert = new SystemAlert();
-            alert.setTitle("New Support Ticket: " + (savedTicket.getTitle() != null ? savedTicket.getTitle() : "Issue Raised"));
-            String flatInfo = user.getHousehold() != null ? " (Flat " + user.getHousehold().getFlatNumber() + ")" : "";
-            alert.setMessage("Ticket #" + savedTicket.getId() + " raised by " + user.getName() + flatInfo + ": " + 
-                    (savedTicket.getDescription() != null && !savedTicket.getDescription().isBlank() ? savedTicket.getDescription() : savedTicket.getTitle()));
-            alert.setDate(LocalDate.now());
-            alert.setType("SUPPORT");
-            alert.setHousehold(user.getHousehold());
-            alert.setTargetUser(savedTicket.getAssignedTo()); // Send directly to the assigned admin
-            systemAlertRepository.save(alert);
-        } catch (Exception e) {
-            System.err.println("Failed to create support notification: " + e.getMessage());
-        }
+            User user = getAuthenticatedUser();
+            if (user == null) return ResponseEntity.status(401).body("Unauthorized");
 
-        return ResponseEntity.ok(savedTicket);
+            ticket.setRaisedBy(user);
+            
+            if (user.getRole() == Role.ROLE_USER) {
+                User assigned = user.getManagedByAdmin();
+                if (assigned == null && user.getHousehold() != null && user.getHousehold().getApartment() != null) {
+                    Long aptId = user.getHousehold().getApartment().getId();
+                    assigned = userRepository.findAll().stream()
+                            .filter(u -> u.getRole() == Role.ROLE_COMMUNITY_ADMIN && u.getManagedApartment() != null && u.getManagedApartment().getId().equals(aptId))
+                            .findFirst().orElse(null);
+                }
+                if (assigned == null) {
+                    assigned = userRepository.findByRole(Role.ROLE_ADMIN).stream().findFirst().orElse(null);
+                }
+                ticket.setAssignedTo(assigned);
+            } else if (user.getRole() == Role.ROLE_COMMUNITY_ADMIN) {
+                List<User> superAdmins = userRepository.findByRole(Role.ROLE_ADMIN);
+                if (!superAdmins.isEmpty()) {
+                    ticket.setAssignedTo(superAdmins.get(0));
+                }
+            }
+            
+            ticket.setStatus("OPEN");
+            SupportTicket savedTicket = supportTicketRepository.save(ticket);
+
+            // Generate Notification / System Alert for new support ticket
+            try {
+                SystemAlert alert = new SystemAlert();
+                alert.setTitle("New Support Ticket: " + (savedTicket.getTitle() != null ? savedTicket.getTitle() : "Issue Raised"));
+                String flatInfo = (user.getHousehold() != null && user.getHousehold().getFlatNumber() != null) 
+                        ? " (Flat " + user.getHousehold().getFlatNumber() + ")" 
+                        : "";
+                alert.setMessage("Ticket #" + savedTicket.getId() + " raised by " + user.getName() + flatInfo + ": " + 
+                        (savedTicket.getDescription() != null && !savedTicket.getDescription().isBlank() ? savedTicket.getDescription() : savedTicket.getTitle()));
+                alert.setDate(LocalDate.now());
+                alert.setType("SUPPORT");
+                alert.setHousehold(user.getHousehold());
+                alert.setTargetUser(savedTicket.getAssignedTo()); // Send directly to the assigned admin
+                systemAlertRepository.save(alert);
+            } catch (Exception e) {
+                System.err.println("Failed to create support notification: " + e.getMessage());
+            }
+
+            return ResponseEntity.ok(savedTicket);
+        } catch (Exception e) {
+            System.err.println("Error saving support ticket: " + e.getMessage());
+            e.printStackTrace();
+            return ResponseEntity.status(500).body("Error saving ticket: " + e.getMessage());
+        }
     }
 
     @PutMapping("/tickets/{id}/status")

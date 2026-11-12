@@ -5,6 +5,8 @@ import jakarta.persistence.*;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
+import lombok.ToString;
+import lombok.EqualsAndHashCode;
 import java.time.LocalDateTime;
 
 @Data
@@ -21,6 +23,8 @@ public class User {
     // A User belongs to a Household (Admins might have this as null)
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "household_id")
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
     private Household household;
 
     @Column(nullable = false)
@@ -44,11 +48,11 @@ public class User {
     private boolean approved = false;
 
     @Lob
-    @Column(name = "document_aadhar", columnDefinition = "TEXT")
+    @Column(name = "document_aadhar")
     private String documentAadhar;
 
     @Lob
-    @Column(name = "document_photo", columnDefinition = "TEXT")
+    @Column(name = "document_photo")
     private String documentPhoto;
 
     @Column(name = "gender", length = 20)
@@ -64,18 +68,24 @@ public class User {
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "managed_by_admin_id")
     @JsonIgnoreProperties({"managedByAdmin", "password", "household"})
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
     private User managedByAdmin;
 
     // The Colony (Apartment) managed by this Community Admin (null for users and super admin)
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "managed_apartment_id")
-    @JsonIgnoreProperties({"households"})
+    @JsonIgnoreProperties({"households", "buildings"})
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
     private Apartment managedApartment;
 
     // The specific Building/Block within the colony managed by this Community Admin
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "managed_building_id")
     @JsonIgnoreProperties({"colony"})
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
     private Building managedBuilding;
 
     @Column(name = "created_at", updatable = false)

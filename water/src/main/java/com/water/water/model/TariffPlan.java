@@ -1,9 +1,12 @@
 package com.water.water.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
+import lombok.ToString;
+import lombok.EqualsAndHashCode;
 import java.math.BigDecimal;
 
 @Data
@@ -19,6 +22,9 @@ public class TariffPlan {
 
     @OneToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "apartment_id", nullable = false)
+    @JsonIgnoreProperties({"households", "buildings"})
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
     private Apartment apartment;
 
     @Column(name = "base_rate", nullable = false)

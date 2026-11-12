@@ -4,6 +4,8 @@ import jakarta.persistence.*;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
+import lombok.ToString;
+import lombok.EqualsAndHashCode;
 import java.time.LocalDate;
 
 @Data
@@ -23,6 +25,8 @@ public class WaterUsageLog {
 
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "household_id", nullable = false)
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
     private Household household;
 
     @Column(nullable = false)

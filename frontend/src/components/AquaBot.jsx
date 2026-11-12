@@ -531,25 +531,63 @@ export function AquaBotChatWindow({ profile, usageLogs, bills, apartments = [], 
       };
     }
 
-    // Calculate dynamic database stats
+    // ==========================================
+    // RAG PROFILE CONTEXT & BOUNDARY EXTRACTION
+    // ==========================================
+    const myFlat = (profile?.household?.flatNumber || profile?.household?.flatNo || '').toString().trim();
+    const myBlock = (profile?.household?.block || '').toString().trim();
+    const myColony = profile?.household?.apartment?.name || profile?.managedApartment?.name || 'AquaTrack Society';
+    const myAdminName = profile?.managedByAdmin?.name || 'Assigned Community Administrator';
+    const myAdminEmail = profile?.managedByAdmin?.email || '';
+
+    // RAG Privacy Boundary: Resident querying another flat/unit
+    if (!isManager && myFlat) {
+      const flatRegex = /(?:flat|unit|room|अपार्टमेंट|फ्लैट)\s*#?\s*([a-z0-9_-]+)/i;
+      const flatMatch = q.match(flatRegex);
+      if (flatMatch && flatMatch[1]) {
+        const queryFlat = flatMatch[1].trim();
+        if (queryFlat.toLowerCase() !== myFlat.toLowerCase()) {
+          return {
+            timestamp,
+            text: isHindi
+              ? `🔒 **डेटा सुरक्षा व प्रोफ़ाइल सीमा (RAG Isolation):**\n\nआपकी प्रोफ़ाइल केवल **फ्लैट ${myFlat} (${myBlock || 'ब्लॉक'})** के लिए अधिकृत है। अन्य इकाइयों (**फ्लैट ${queryFlat}**) का व्यक्तिगत जल विवरण या बिल एक्सेस करना प्रतिबंधित है।`
+              : `🔒 **Profile Isolation & Privacy Guard (RAG Isolation):**\n\nYour account is strictly authorized for **Flat ${myFlat} (${myBlock || 'Assigned Block'})**. Access to consumption telemetry or invoices for **Flat ${queryFlat}** is restricted under tenant privacy policies.`,
+            suggestions: defaultSuggestions
+          };
+        }
+      }
+    }
+
+    // RAG Privacy Boundary: Resident querying directory of all users
+    if (!isManager && (q.includes('all user') || q.includes('user list') || q.includes('resident list') || q.includes('other user') || q.includes('other resident') || q.includes('सभी यूजर') || q.includes('दूसरे निवासी') || q.includes('अन्य निवासी'))) {
+      return {
+        timestamp,
+        text: isHindi
+          ? `🔒 **डेटा गोपनीयता सूचना:**\n\nव्यक्तिगत सुरक्षा नियमों के तहत, निवासी अन्य परिवारों या संपूर्ण सिस्टम डायरेक्टरी को एक्सेस नहीं कर सकते। आप केवल अपनी प्रोफ़ाइल और अपने कम्युनिटी एडमिन (**${myAdminName}**) की जानकारी देख सकते हैं।`
+          : `🔒 **Tenant Privacy Notice:**\n\nUnder residential data privacy rules, residents cannot view other households or the global user directory. You are authorized to access data for your registered flat (**${myFlat}**) and contact your assigned Community Admin (**${myAdminName}**).`,
+        suggestions: defaultSuggestions
+      };
+    }
+
+    // Calculate dynamic database stats for Managers
     const totalUsersCount = users.length || 0;
     const communityAdminsCount = users.filter(u => u.role === 'ROLE_COMMUNITY_ADMIN').length;
     const residentUsersCount = users.filter(u => u.role === 'ROLE_USER').length;
     const totalApartmentsCount = apartments.length || 0;
     const totalHouseholdsCount = households.length || 0;
 
-    // 1. Society & Building Database Queries (For Admins & Super Admins)
-    if (matchesKeywords(societyKeywords) && (isManager || q.includes('flat') || q.includes('building') || q.includes('block'))) {
+    // 1. Society & Building Database Queries (RAG Profile Scoped)
+    if (matchesKeywords(societyKeywords) && (isManager || q.includes('flat') || q.includes('building') || q.includes('block') || q.includes('society') || q.includes('colony'))) {
       if (isSuperAdmin) {
         const aptNames = apartments.map(a => `• **${a.name}** (${a.address || 'Registered Colony'})`).join('\n') || 'None registered yet';
         return {
           timestamp,
           text: isHindi
-            ? `🏢 **सोसायटी व कॉलोनी डेटाबेस रिपोर्ट:**\n\n` +
+            ? `🏢 **सोसायटी व कॉलोनी डेटाबेस रिपोर्ट (सुपर एडमिन):**\n\n` +
               `• **कुल पंजीकृत सोसायटियां:** ${totalApartmentsCount}\n` +
               `• **कुल पंजीकृत फ्लैट्स/इकाइयां:** ${totalHouseholdsCount}\n\n` +
               `**सक्रिय सोसायटियां:**\n${aptNames}`
-            : `🏢 **Societies & Colony Database Report:**\n\n` +
+            : `🏢 **Societies & Colony Database Report (Super Admin):**\n\n` +
               `• **Total Registered Societies:** ${totalApartmentsCount}\n` +
               `• **Total Household Units:** ${totalHouseholdsCount}\n\n` +
               `**Active Societies:**\n${aptNames}`,
@@ -560,14 +598,16 @@ export function AquaBotChatWindow({ profile, usageLogs, bills, apartments = [], 
           suggestions: defaultSuggestions
         };
       } else if (isCommunityAdmin) {
+        const managedAptName = profile?.managedApartment?.name || 'Your Managed Society';
+        const managedBldName = profile?.managedBuilding?.name || 'All Assigned Blocks';
         return {
           timestamp,
           text: isHindi
-            ? `🏠 **आपकी सोसायटी फ्लैट्स रिपोर्ट:**\n\n` +
+            ? `🏠 **${managedAptName} (${managedBldName}) रिपोर्ट:**\n\n` +
               `• **प्रबंधित फ्लैट्स की संख्या:** ${totalHouseholdsCount}\n` +
-              `• **पंजीकृत निवासी:** ${residentUsersCount}\n\n` +
+              `• **सक्रिय निवासी खाते:** ${residentUsersCount}\n\n` +
               `आप निवासियों को आमंत्रित कर सकते हैं या नए ब्लॉक/फ्लैट बना सकते हैं।`
-            : `🏠 **Your Society Flats Report:**\n\n` +
+            : `🏠 **${managedAptName} (${managedBldName}) Status:**\n\n` +
               `• **Managed Households:** ${totalHouseholdsCount}\n` +
               `• **Registered Resident Accounts:** ${residentUsersCount}\n\n` +
               `You can invite residents or manage building blocks from the Households tab.`,
@@ -577,11 +617,36 @@ export function AquaBotChatWindow({ profile, usageLogs, bills, apartments = [], 
           },
           suggestions: defaultSuggestions
         };
+      } else {
+        // Resident Profile Scoped
+        return {
+          timestamp,
+          text: isHindi
+            ? `🏠 **आपकी पंजीकृत हाउसहोल्ड प्रोफ़ाइल (RAG सत्यापित):**\n\n` +
+              `• **सोसायटी/कॉलोनी:** ${myColony}\n` +
+              `• **ब्लॉक:** ${myBlock || 'मुख्य ब्लॉक'}\n` +
+              `• **फ्लैट नंबर:** ${myFlat || 'आवंटित इकाई'}\n` +
+              `• **मीटर कनेक्शन:** ${profile?.household?.hasMeter ? 'स्मार्ट डिजिटल फ्लो मीटर ✅' : 'मानक कनेक्शन'}\n` +
+              `• **कम्युनिटी व्यवस्थापक:** ${myAdminName} ${myAdminEmail ? `(${myAdminEmail})` : ''}\n\n` +
+              `🔒 *डेटा पृथक्करण:* यह सत्र केवल आपकी निजी यूनिट के रिकॉर्ड्स से जुड़ा है।`
+            : `🏠 **Your Registered Household Profile (RAG Verified):**\n\n` +
+              `• **Society / Colony:** ${myColony}\n` +
+              `• **Block:** ${myBlock || 'Main Block'}\n` +
+              `• **Flat Number:** ${myFlat || 'Assigned Unit'}\n` +
+              `• **Meter Connection:** ${profile?.household?.hasMeter ? 'Active Smart Digital Flow Meter ✅' : 'Standard Connection'}\n` +
+              `• **Community Admin:** ${myAdminName} ${myAdminEmail ? `(${myAdminEmail})` : ''}\n\n` +
+              `🔒 *Profile Isolated:* This assistant is bound exclusively to your household records.`,
+          actionButton: {
+            label: isHindi ? '🏠 मेरी खपत देखें' : '🏠 View My Household',
+            onClick: () => setActiveTab && setActiveTab('my_usage')
+          },
+          suggestions: defaultSuggestions
+        };
       }
     }
 
-    // 2. Users & Admins Overview (Admins)
-    if (matchesKeywords(userKeywords) && (isManager || q.includes('admin') || q.includes('profile') || q.includes('account'))) {
+    // 2. Users & Admins Overview (RAG Profile Scoped)
+    if (matchesKeywords(userKeywords) && (isManager || q.includes('admin') || q.includes('profile') || q.includes('account') || q.includes('प्रोफ़ाइल') || q.includes('खाता'))) {
       if (isManager) {
         return {
           timestamp,
@@ -600,6 +665,27 @@ export function AquaBotChatWindow({ profile, usageLogs, bills, apartments = [], 
             label: isHindi ? '👥 निवासी सूची देखें' : '👥 View Resident Directory',
             onClick: () => setActiveTab && setActiveTab('residents')
           },
+          suggestions: defaultSuggestions
+        };
+      } else {
+        // Resident Account Profile
+        return {
+          timestamp,
+          text: isHindi
+            ? `👤 **आपकी व्यक्तिगत खाता प्रोफ़ाइल:**\n\n` +
+              `• **नाम:** ${profile?.name || userName}\n` +
+              `• **ईमेल:** ${profile?.email || 'N/A'}\n` +
+              `• **भूमिका:** पंजीकृत निवासी (Resident)\n` +
+              `• **फ्लैट:** ${myBlock ? `${myBlock} - ` : ''}${myFlat || 'पंजीकृत इकाई'}\n` +
+              `• **खाता स्थिति:** ${profile?.approved ? 'सत्यापित एवं सक्रिय ✅' : 'समीक्षाधीन (KYC Pending) ⏳'}\n` +
+              `• **कम्युनिटी व्यवस्थापक:** ${myAdminName}`
+            : `👤 **Your Personal Account Profile:**\n\n` +
+              `• **Name:** ${profile?.name || userName}\n` +
+              `• **Email:** ${profile?.email || 'N/A'}\n` +
+              `• **Role:** Registered Resident\n` +
+              `• **Unit:** ${myBlock ? `${myBlock} - ` : ''}${myFlat || 'Registered Unit'}\n` +
+              `• **Account Status:** ${profile?.approved ? 'Verified & Active ✅' : 'KYC Review Pending ⏳'}\n` +
+              `• **Assigned Community Admin:** ${myAdminName}`,
           suggestions: defaultSuggestions
         };
       }
@@ -649,6 +735,24 @@ export function AquaBotChatWindow({ profile, usageLogs, bills, apartments = [], 
           suggestions: defaultSuggestions
         };
       } else {
+        if (!usageLogs || usageLogs.length === 0) {
+          return {
+            timestamp,
+            text: isHindi
+              ? `📊 **जल खपत स्थिति (${userName} - फ्लैट ${myFlat || 'यूनिट'}):**\n\n` +
+                `वर्तमान में आपके फ्लैट के लिए कोई नया डिजिटल मीटर लॉग दर्ज नहीं हुआ है।\n` +
+                `जैसे ही आपकी दैनिक मीटर रीडिंग सबमिट होगी, आपकी लाइव खपत और ट्रेंड चार्ट यहाँ उपलब्ध हो जाएगा।`
+              : `📊 **Water Consumption Telemetry (${userName} - Flat ${myFlat || 'Unit'}):**\n\n` +
+                `No water meter readings have been logged for your flat yet.\n` +
+                `Once daily readings are recorded, your live telemetry and daily consumption trends will appear here.`,
+            actionButton: {
+              label: isHindi ? '📊 मेरी खपत देखें' : '📊 View Usage Dashboard',
+              onClick: () => setActiveTab && setActiveTab('my_usage')
+            },
+            suggestions: defaultSuggestions
+          };
+        }
+
         return {
           timestamp,
           text: isHindi

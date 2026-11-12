@@ -5,6 +5,8 @@ import jakarta.persistence.*;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
+import lombok.ToString;
+import lombok.EqualsAndHashCode;
 
 @Data
 @NoArgsConstructor
@@ -24,6 +26,8 @@ public class Building {
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "colony_id")
     @JsonIgnoreProperties({"households", "buildings"})
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
     private Apartment colony;
 
     @Column(name = "is_deleted", nullable = false)

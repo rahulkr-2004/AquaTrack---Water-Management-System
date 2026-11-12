@@ -73,20 +73,31 @@ public class OnboardingService {
     @Value("${spring.mail.username:aceruser12003@gmail.com}")
     private String senderEmail;
 
+    @Value("${app.frontend.url:http://localhost:5173}")
+    private String frontendUrl;
+
 
     /**
      * Called on application startup to permanently drop legacy/orphaned tables
      * that were created under old schema names (e.g. 'tickets' -> now 'support_tickets').
+    /**
+     * Drop old tables left over from past database designs.
+     * Runs with NOT_SUPPORTED propagation so any SQL warnings do not mark the caller's transaction rollback-only.
      */
-    @Transactional
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)
     public void dropLegacyTables() {
         try {
             try {
                 entityManager.createNativeQuery("DROP TABLE IF EXISTS tickets").executeUpdate();
             } catch (Exception ignored) {}
-            
+
             try {
-                entityManager.createNativeQuery("ALTER TABLE buildings DROP COLUMN IF EXISTS deleted").executeUpdate();
+                Number count = (Number) entityManager.createNativeQuery(
+                    "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'buildings' AND column_name = 'deleted'"
+                ).getSingleResult();
+                if (count != null && count.intValue() > 0) {
+                    entityManager.createNativeQuery("ALTER TABLE buildings DROP COLUMN deleted").executeUpdate();
+                }
             } catch (Exception ignored) {}
 
             System.out.println("Bootstrap: Legacy table cleanup complete.");
@@ -120,6 +131,7 @@ public class OnboardingService {
      * Create a new colony (Apartment) together with an initial set of buildings.
      * Building names are trimmed, lowercased for dedup-check, then title-cased for display.
      */
+    @Transactional
     public Apartment createColonyWithBuildings(ColonyRequest request) {
         String normalizedName = request.getName().trim();
         if (apartmentRepository.existsByName(normalizedName)) {
@@ -147,6 +159,7 @@ public class OnboardingService {
     }
 
     /** Add building(s) to an existing colony. Supports single or comma-separated names. */
+    @Transactional
     public Building addBuildingToColony(Long colonyId, String buildingName) {
         Apartment colony = apartmentRepository.findById(colonyId)
                 .orElseThrow(() -> new IllegalArgumentException("Colony not found."));
@@ -191,7 +204,7 @@ public class OnboardingService {
         if (b.getColony() != null) {
             Long aptId = b.getColony().getId();
             String block = b.getName();
-            List<Household> affectedHouseholds = householdRepository.findByApartmentIdAndBlock(aptId, block);
+            List<Household> affectedHouseholds = householdRepository.findByApartmentIdAndBlockFlexible(aptId, block);
             for (Household h : affectedHouseholds) {
                 // Detach residents from their household (preserves billing history)
                 List<User> residents = userRepository.findByHouseholdId(h.getId());
@@ -208,6 +221,7 @@ public class OnboardingService {
 
 
     /** Assign a specific building to a Community Admin. */
+    @Transactional
     public User assignAdminBuilding(Long adminId, Long buildingId) {
         User admin = userRepository.findById(adminId)
                 .orElseThrow(() -> new IllegalArgumentException("Admin not found."));
@@ -226,6 +240,7 @@ public class OnboardingService {
     }
 
     // --- 1. Register a New Apartment Building ---
+    @Transactional
     public Apartment registerApartment(ApartmentRequest request) {
         if (apartmentRepository.existsByName(request.getName())) {
             throw new IllegalArgumentException("An apartment with this name already exists!");
@@ -237,6 +252,7 @@ public class OnboardingService {
     }
 
     // --- 1.5. Invite Resident (Community Admin / Super Admin) ---
+    @Transactional
     public Invitation inviteResident(String name, String email, Long apartmentId, String block, String flatNumber, String adminEmail, String adminRole) {
         if (email == null || email.isBlank()) {
             throw new IllegalArgumentException("Resident email is required.");
@@ -244,7 +260,8 @@ public class OnboardingService {
         if (name == null || name.isBlank()) {
             throw new IllegalArgumentException("Resident name is required.");
         }
-        if (userRepository.existsByEmail(email.trim())) {
+        String cleanEmail = email.trim().toLowerCase();
+        if (userRepository.existsByEmail(cleanEmail)) {
             throw new IllegalArgumentException("A user with this email address is already registered.");
         }
 
@@ -255,7 +272,7 @@ public class OnboardingService {
                 apartmentId = admin.getManagedApartment().getId();
             }
         }
-        if (apartmentId == null && "ROLE_COMMUNITY_ADMIN".equals(adminRole)) {
+        if (apartmentId == null && ("ROLE_COMMUNITY_ADMIN".equals(adminRole) || "COMMUNITY_ADMIN".equals(adminRole))) {
             throw new IllegalArgumentException("Apartment/Colony ID is required. Please ensure your account has a managed colony assigned.");
         }
         
@@ -264,22 +281,30 @@ public class OnboardingService {
         if (apartmentId != null) {
             invitationApartment = apartmentRepository.findById(apartmentId).orElse(null);
         }
-        if (invitationApartment == null && "ROLE_COMMUNITY_ADMIN".equals(adminRole)) {
-            throw new IllegalArgumentException("Apartment/Colony not found. Please ensure your account has a valid managed colony assigned.");
+        if (invitationApartment == null) {
+            invitationApartment = apartmentRepository.findAll().stream().findFirst().orElse(null);
+        }
+        if (invitationApartment == null) {
+            throw new IllegalArgumentException("Apartment/Colony not found. Please ensure at least one colony exists before inviting residents.");
         }
 
-        Invitation invitation = new Invitation();
+        // Reuse existing pending invitation if present, otherwise create new
+        Invitation invitation = invitationRepository.findByEmail(cleanEmail).orElse(new Invitation());
+        if ("REGISTERED".equals(invitation.getStatus())) {
+            throw new IllegalArgumentException("A resident with this email has already registered.");
+        }
+
         invitation.setToken(UUID.randomUUID().toString());
-        invitation.setName(name);
-        invitation.setEmail(email);
+        invitation.setName(name.trim());
+        invitation.setEmail(cleanEmail);
         invitation.setApartment(invitationApartment);
-        invitation.setBlock(block);
-        invitation.setFlatNumber(flatNumber);
+        invitation.setBlock(block != null && !block.isBlank() ? block.trim() : "Default");
+        invitation.setFlatNumber(flatNumber != null && !flatNumber.isBlank() ? flatNumber.trim() : "1");
         invitation.setStatus("PENDING");
         
         Invitation saved = invitationRepository.save(invitation);
         
-        String inviteLink = "http://localhost:5173/invite?token=" + saved.getToken();
+        String inviteLink = frontendUrl + "/invite?token=" + saved.getToken();
         
         if (emailSender != null) {
             try {
@@ -290,8 +315,9 @@ public class OnboardingService {
                 MimeMessage message = emailSender.createMimeMessage();
                 MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
                 
-                helper.setFrom(senderEmail);
-                helper.setTo(email);
+                String fromAddress = (senderEmail != null && !senderEmail.isBlank()) ? senderEmail : "aceruser12003@gmail.com";
+                helper.setFrom(fromAddress);
+                helper.setTo(cleanEmail);
                 helper.setSubject("🏡 Your AquaTrack Invitation — Complete Your Registration");
                 
                 String htmlMsg = "<!DOCTYPE html>" +
@@ -362,7 +388,7 @@ public class OnboardingService {
                         "        <div class='details-card'>" +
                         "          <div class='details-title'>📋 Your Registration Details</div>" +
                         "          <div class='detail-row'><div class='detail-label'>Full Name</div><div class='detail-value'>" + name + "</div></div>" +
-                        "          <div class='detail-row'><div class='detail-label'>Email</div><div class='detail-value'>" + email + "</div></div>" +
+                        "          <div class='detail-row'><div class='detail-label'>Email</div><div class='detail-value'>" + cleanEmail + "</div></div>" +
                         "          <div class='detail-row'><div class='detail-label'>Block</div><div class='detail-value'>" + block + "</div></div>" +
                         "          <div class='detail-row'><div class='detail-label'>Flat Number</div><div class='detail-value'>" + flatNumber + "</div></div>" +
                         "          <div class='detail-row'><div class='detail-label'>Invited By</div><div class='detail-value'>" + communityAdminName + " (" + adminEmail + ")</div></div>" +
@@ -389,15 +415,16 @@ public class OnboardingService {
                 
                 helper.setText(htmlMsg, true);
                 emailSender.send(message);
-                System.out.println("Premium HTML Email sent successfully to: " + email);
+                System.out.println("Premium HTML Email sent successfully to: " + cleanEmail);
             } catch (Exception e) {
-                System.err.println("Failed to send HTML email to " + email + ": " + e.getMessage());
+                System.err.println("Failed to send HTML email to " + cleanEmail + ": " + e.getMessage());
                 e.printStackTrace();
+                throw new RuntimeException("Invitation saved, but email delivery failed: " + e.getMessage(), e);
             }
         } else {
             // Mock email sending fallback if SMTP is not configured
             System.out.println("=====================================================");
-            System.out.println("MOCK EMAIL SENT TO: " + email);
+            System.out.println("MOCK EMAIL SENT TO: " + cleanEmail);
             System.out.println("Subject: You're invited to join AquaTrack!");
             System.out.println("Body: Please click the link to verify your documents and register: ");
             System.out.println(inviteLink);
@@ -407,18 +434,27 @@ public class OnboardingService {
         return saved;
     }
     // --- 2. Register a New Flat inside a Building ---
+    @Transactional
     public Household registerHousehold(HouseholdRequest request) {
         Apartment apartment = apartmentRepository.findById(request.getApartmentId())
                 .orElseThrow(() -> new IllegalArgumentException("Error: Apartment not found!"));
 
-        if (householdRepository.existsByApartmentIdAndBlockAndFlatNumber(
+        if (householdRepository.existsFlexible(
                 request.getApartmentId(), request.getBlock(), request.getFlatNumber())) {
             throw new IllegalArgumentException("Error: This flat already exists in this block!");
         }
 
         Household household = new Household();
         household.setApartment(apartment);
-        household.setBlock(request.getBlock());
+        
+        Building building = buildingRepository.findByNameFlexible(request.getBlock(), request.getApartmentId()).orElse(null);
+        if (building != null) {
+            household.setBuilding(building);
+            household.setBlock(building.getName());
+        } else {
+            household.setBlock(request.getBlock());
+        }
+
         household.setFlatNumber(request.getFlatNumber());
         household.setHasMeter(request.isHasMeter());
         return householdRepository.save(household);
@@ -529,6 +565,7 @@ public class OnboardingService {
      * - When a Community Admin approves a ROLE_USER, auto-link managedByAdmin to that Community Admin.
      * - Super Admin can approve anyone (Community Admins + Household Users).
      */
+    @Transactional
     public User approveUser(Long userId, String adminEmail, String adminRole) {
         User targetUser = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("User not found!"));
@@ -546,6 +583,24 @@ public class OnboardingService {
             targetUser.setManagedByAdmin(communityAdmin);
         } else if (!isSuperAdmin) {
             throw new IllegalArgumentException("Access Denied: Only administrators can approve registrations.");
+        } else {
+            // If Super Admin approves, also auto-link to matching Community Admin of the block if available
+            if (targetUser.getRole() == Role.ROLE_USER && targetUser.getManagedByAdmin() == null && targetUser.getHousehold() != null) {
+                Household hh = targetUser.getHousehold();
+                Long aptId = hh.getApartment() != null ? hh.getApartment().getId() : null;
+                if (aptId != null) {
+                    User blockAdmin = userRepository.findAll().stream()
+                            .filter(u -> u.getRole() == Role.ROLE_COMMUNITY_ADMIN && u.isApproved()
+                                    && u.getManagedApartment() != null && u.getManagedApartment().getId().equals(aptId)
+                                    && (u.getManagedBuilding() == null
+                                        || u.getManagedBuilding().getName().equalsIgnoreCase(hh.getBlock())
+                                        || u.getManagedBuilding().getName().replaceAll("(?i)Block\\s*", "").equalsIgnoreCase(hh.getBlock().replaceAll("(?i)Block\\s*", ""))))
+                            .findFirst().orElse(null);
+                    if (blockAdmin != null) {
+                        targetUser.setManagedByAdmin(blockAdmin);
+                    }
+                }
+            }
         }
 
         targetUser.setApproved(true);
@@ -567,6 +622,7 @@ public class OnboardingService {
     // REJECT REGISTRATION
     // =========================================================================
 
+    @Transactional
     public void rejectUser(Long userId, String adminEmail, String adminRole) {
         User targetUser = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("User not found!"));
@@ -599,6 +655,7 @@ public class OnboardingService {
         userRepository.delete(targetUser);
     }
 
+    @Transactional
     public void requestReuploadUser(Long userId, String adminEmail, String adminRole, String reason) {
         User targetUser = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("User not found!"));
@@ -622,7 +679,7 @@ public class OnboardingService {
                 inv.setAlternateNo(null);
                 invitationRepository.save(inv);
                 
-                String inviteLink = "http://localhost:5173/?invite=" + inv.getToken();
+                String inviteLink = frontendUrl + "/invite?token=" + inv.getToken();
                 
                 if (emailSender != null) {
                     try {
@@ -670,6 +727,7 @@ public class OnboardingService {
      * - Community Admin can create ROLE_USER under themselves
      * - Super Admin can create ROLE_USER or ROLE_COMMUNITY_ADMIN
      */
+    @Transactional
     public User createUser(String name, String email, String password, String roleName,
                            String adminEmail, String adminRole) {
         if (userRepository.existsByEmail(email)) {
@@ -721,6 +779,7 @@ public class OnboardingService {
      * - Community Admin can only update their own managed household users
      * - Super Admin can update any non-super-admin user
      */
+    @Transactional
     public User updateUser(Long userId, String name, String email, Long householdId,
                            String adminEmail, String adminRole) {
         User targetUser = userRepository.findById(userId)
@@ -823,6 +882,7 @@ public class OnboardingService {
     /**
      * Super Admin can reassign a household user to a different Community Admin.
      */
+    @Transactional
     public User assignManagedAdmin(Long userId, Long communityAdminId, String adminRole) {
         if (!"ROLE_ADMIN".equals(adminRole)) {
             throw new IllegalArgumentException("Access Denied: Only Super Admin can reassign managing admins.");
@@ -853,6 +913,7 @@ public class OnboardingService {
     // ASSIGN APARTMENT TO COMMUNITY ADMIN (Super Admin only)
     // =========================================================================
 
+    @Transactional
     public User assignAdminApartment(Long adminId, Long apartmentId, String adminRole) {
         if (!"ROLE_ADMIN".equals(adminRole)) {
             throw new IllegalArgumentException("Access Denied: Only Super Admin can assign an apartment to a Community Admin.");
@@ -880,6 +941,7 @@ public class OnboardingService {
     // FLAT ASSIGNMENT
     // =========================================================================
 
+    @Transactional
     public User assignResidentToHousehold(Long userId, Long householdId, String adminRole) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("User not found!"));
@@ -907,6 +969,7 @@ public class OnboardingService {
         return userRepository.save(user);
     }
 
+    @Transactional
     public Household updateMeterStatus(Long householdId, boolean hasMeter) {
         Household household = householdRepository.findById(householdId)
                 .orElseThrow(() -> new IllegalArgumentException("Household not found!"));

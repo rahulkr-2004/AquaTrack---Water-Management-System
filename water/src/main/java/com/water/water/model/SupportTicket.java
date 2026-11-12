@@ -5,6 +5,8 @@ import jakarta.persistence.*;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
+import lombok.ToString;
+import lombok.EqualsAndHashCode;
 import java.time.LocalDateTime;
 
 @Data
@@ -24,7 +26,6 @@ public class SupportTicket {
     @Column(columnDefinition = "TEXT")
     private String description;
 
-    @Lob
     @Column(columnDefinition = "TEXT")
     private String attachment;
 
@@ -37,11 +38,15 @@ public class SupportTicket {
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "raised_by_id", nullable = false)
     @JsonIgnoreProperties({"password", "managedByAdmin", "managedApartment", "managedBuilding", "household", "documentAadhar", "documentPhoto"})
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
     private User raisedBy;
 
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "assigned_to_id")
     @JsonIgnoreProperties({"password", "managedByAdmin", "managedApartment", "managedBuilding", "household", "documentAadhar", "documentPhoto"})
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
     private User assignedTo;
 
     @Column(name = "created_at", updatable = false)

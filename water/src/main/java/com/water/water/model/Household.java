@@ -1,9 +1,12 @@
 package com.water.water.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
+import lombok.ToString;
+import lombok.EqualsAndHashCode;
 
 @Data
 @NoArgsConstructor
@@ -18,7 +21,18 @@ public class Household {
 
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "apartment_id", nullable = false)
+    @JsonIgnoreProperties({"households", "buildings"})
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
     private Apartment apartment;
+
+    // Direct relationship to Building block
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "building_id")
+    @JsonIgnoreProperties({"colony"})
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
+    private Building building;
 
     @Column(nullable = false)
     private String block;

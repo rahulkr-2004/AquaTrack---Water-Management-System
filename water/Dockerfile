@@ -25,14 +25,18 @@ EXPOSE 8080
 
 # Environment and JVM optimization for fast cold starts on Render free tier (512MB RAM):
 # -XX:+UseContainerSupport respects container cgroup limits
-# -XX:MaxRAMPercentage=75.0 prevents container OOM kills
+# -XX:MaxRAMPercentage=55.0 keeps heap ~280MB, leaving ample headroom for Metaspace and threads
+# -XX:+UseSerialGC minimizes native memory overhead compared to G1GC
 # -Xss512k reduces per-thread stack overhead
 # -XX:+TieredCompilation -XX:TieredStopAtLevel=1 avoids expensive C2 JIT compiler overhead at boot, cutting startup time by over 50%
+# -XX:CICompilerCount=2 limits JIT compiler thread memory usage
 ENTRYPOINT ["java", \
   "-XX:+UseContainerSupport", \
-  "-XX:MaxRAMPercentage=75.0", \
+  "-XX:MaxRAMPercentage=55.0", \
+  "-XX:+UseSerialGC", \
   "-Xss512k", \
   "-XX:+TieredCompilation", \
   "-XX:TieredStopAtLevel=1", \
+  "-XX:CICompilerCount=2", \
   "-Djava.security.egd=file:/dev/./urandom", \
   "-jar", "app.jar"]

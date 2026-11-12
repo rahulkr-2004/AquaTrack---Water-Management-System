@@ -93,6 +93,7 @@ const CountUpNumber = ({ target, decimals = 0, suffix = '', duration = 2200 }) =
 
 export default function AuthView({ setToken, message, showMessage, darkMode, toggleDarkMode, lang = 'en', setLang }) {
   const [view, setView] = useState('login'); // 'login' (default), 'register', 'admin_verify'
+  const [adminVerifyUserId, setAdminVerifyUserId] = useState(null); // ID/identifier for Community Admin document upload
   const [authModalOpen, setAuthModalOpen] = useState(false); // Auth popup modal visibility
   const [landingNav, setLandingNav] = useState('home'); // 'home' | 'features' | 'about' | 'contact'
   const [contactForm, setContactForm] = useState({ name: '', email: '', phone: '', message: '' });
@@ -222,11 +223,22 @@ export default function AuthView({ setToken, message, showMessage, darkMode, tog
     }
 
     try {
-      const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(bodyPayload)
-      });
+      let response;
+      try {
+        response = await fetch(`${API_BASE_URL}${endpoint}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(bodyPayload)
+        });
+      } catch (retryErr) {
+        showMessage('info', 'Connecting to server... please wait.');
+        await new Promise(r => setTimeout(r, 3000));
+        response = await fetch(`${API_BASE_URL}${endpoint}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(bodyPayload)
+        });
+      }
 
       if (response.ok) {
         if (view === 'login') {

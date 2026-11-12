@@ -49,6 +49,19 @@ public class AlertController {
             } else {
                 logs = new ArrayList<>();
             }
+        } else if (user.getRole() == Role.ROLE_COMMUNITY_ADMIN) {
+            if (user.getManagedApartment() != null) {
+                final Long aptId = user.getManagedApartment().getId();
+                final Long bldId = user.getManagedBuilding() != null ? user.getManagedBuilding().getId() : null;
+                logs = waterUsageLogRepository.findAll().stream()
+                    .filter(l -> l.getHousehold() != null 
+                        && l.getHousehold().getApartment() != null 
+                        && l.getHousehold().getApartment().getId().equals(aptId)
+                        && (bldId == null || (l.getHousehold().getBuilding() != null && l.getHousehold().getBuilding().getId().equals(bldId))))
+                    .collect(java.util.stream.Collectors.toList());
+            } else {
+                logs = new ArrayList<>();
+            }
         } else {
             logs = waterUsageLogRepository.findAll();
         }
@@ -103,18 +116,41 @@ public class AlertController {
             return false;
         }
 
-        // Targeted alert directly to a specific user
+        Role role = user.getRole();
+
+        // 1. Administrative registration review alerts are NEVER shown to residents
+        if ("REGISTRATION".equalsIgnoreCase(alert.getType())) {
+            if (role == Role.ROLE_USER) {
+                return false;
+            }
+            if (role == Role.ROLE_COMMUNITY_ADMIN) {
+                // Show if it's a resident registration inside this admin's managed apartment / building
+                if (alert.getTargetUser() != null && alert.getTargetUser().getRole() == Role.ROLE_USER) {
+                    if (user.getManagedApartment() != null && alert.getHousehold() != null && alert.getHousehold().getApartment() != null) {
+                        boolean matchApt = user.getManagedApartment().getId().equals(alert.getHousehold().getApartment().getId());
+                        if (!matchApt) return false;
+                        if (user.getManagedBuilding() != null) {
+                            return alert.getHousehold().getBuilding() != null &&
+                                   user.getManagedBuilding().getId().equals(alert.getHousehold().getBuilding().getId());
+                        }
+                        return true;
+                    }
+                }
+                return false; // Other registration requests (e.g. Community Admin signup) are Super Admin only
+            }
+            if (role == Role.ROLE_ADMIN) {
+                return true;
+            }
+            return false;
+        }
+
+        // 2. Direct user-targeted notification (e.g. personal billing invoice, KYC document approved/rejected)
         if (alert.getTargetUser() != null) {
             return alert.getTargetUser().getId().equals(user.getId());
         }
 
-        Role role = user.getRole();
-
+        // 3. Resident Profile Isolation
         if (role == Role.ROLE_USER) {
-            // Resident notification isolation
-            if ("REGISTRATION".equalsIgnoreCase(alert.getType())) {
-                return false; // Residents don't see administrative registration requests
-            }
             if (alert.getHousehold() != null) {
                 return user.getHousehold() != null && alert.getHousehold().getId().equals(user.getHousehold().getId());
             }
@@ -124,22 +160,23 @@ public class AlertController {
                 || "GENERAL".equalsIgnoreCase(type) || "INFO".equalsIgnoreCase(type) || "WATER_SUPPLY".equalsIgnoreCase(type)
                 || "SUPPORT".equalsIgnoreCase(type);
 
+        // 4. Community Admin Isolation
         } else if (role == Role.ROLE_COMMUNITY_ADMIN) {
-            // Community Admin notification isolation
-            if ("REGISTRATION".equalsIgnoreCase(alert.getType())) {
-                return false; // Community Admin registration/approval alerts are only for Super Admin
-            }
             if (alert.getHousehold() != null) {
-                // Only show household alerts within their managed apartment
-                return user.getManagedApartment() != null && 
+                boolean matchApt = user.getManagedApartment() != null && 
                        alert.getHousehold().getApartment() != null &&
                        alert.getHousehold().getApartment().getId().equals(user.getManagedApartment().getId());
+                if (!matchApt) return false;
+                if (user.getManagedBuilding() != null) {
+                    return alert.getHousehold().getBuilding() != null &&
+                           user.getManagedBuilding().getId().equals(alert.getHousehold().getBuilding().getId());
+                }
+                return true;
             }
-            // General/System alerts visible to Community Admin
             return true;
 
+        // 5. Super Admin Isolation
         } else if (role == Role.ROLE_ADMIN) {
-            // Super Admin notification isolation — sees all system alerts
             return true;
         }
 

@@ -1,9 +1,12 @@
 package com.water.water.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
+import lombok.ToString;
+import lombok.EqualsAndHashCode;
 import java.time.LocalDate;
 import java.math.BigDecimal;
 
@@ -20,6 +23,9 @@ public class BillingCycle {
 
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "apartment_id", nullable = false)
+    @JsonIgnoreProperties({"households", "buildings"})
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
     private Apartment apartment;
 
     @Column(name = "start_date", nullable = false)

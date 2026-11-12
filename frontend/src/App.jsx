@@ -383,6 +383,10 @@ export default function App() {
   };
   useEffect(() => {
     document.title = "AquaTrack - Smart Water Manager";
+    // Pre-warm backend container immediately on cloud hosts (Render free tier cold starts)
+    try {
+      fetch(`${API_BASE_URL}/health`).catch(() => {});
+    } catch {}
   }, []);
 
   useEffect(() => {
@@ -517,7 +521,7 @@ export default function App() {
 
   if (!token) {
     const urlParams = new URLSearchParams(window.location.search);
-    let inviteToken = urlParams.get('token');
+    let inviteToken = urlParams.get('token') || urlParams.get('invite');
     if (!inviteToken && window.location.pathname.startsWith('/invite/')) {
       inviteToken = window.location.pathname.replace('/invite/', '').trim();
     }
@@ -5034,7 +5038,7 @@ function MeterReadingsTab({ usageLogs = [], households = [], apartments = [], pr
             const sampleResident = blockHouseholds.find(h => h.resident?.managedByAdmin || h.managedByAdmin)?.resident;
             const adminName = sampleResident?.managedByAdmin?.name || '';
             const sampleAptName = blockHouseholds.find(h => h.apartment?.name)?.apartment?.name 
-              || (apartments && apartments.length > 0 ? apartments[0].name : 'Jeet Homes');
+              || (apartments && apartments.length > 0 ? apartments[0].name : 'Registered Society');
 
             const totalBlockWaterUsed = blockHouseholds.reduce((sum, hh) => {
               const hhLogs = logsByHH[hh.id] || [];
@@ -8594,7 +8598,7 @@ function WaterTipsTab({ lang, t, profile, token, usageLogs }) {
 
   const userFlat = profile?.household?.flatNumber || '302';
   const userBlock = profile?.household?.block || 'A';
-  const userApartment = profile?.household?.apartment?.name || 'Green Valley Heights';
+  const userApartment = profile?.household?.apartment?.name || 'Registered Society';
   const userName = profile?.name || 'Resident User';
 
   useEffect(() => {

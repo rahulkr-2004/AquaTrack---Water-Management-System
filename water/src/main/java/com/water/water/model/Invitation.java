@@ -5,6 +5,8 @@ import jakarta.persistence.*;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
+import lombok.ToString;
+import lombok.EqualsAndHashCode;
 import java.time.LocalDateTime;
 
 @Data
@@ -31,9 +33,11 @@ public class Invitation {
     private String email;
 
     // Proper FK relationship to Apartment — fixes referential integrity issue
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "apartment_id", nullable = false)
     @JsonIgnoreProperties({"households", "buildings"})
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
     private Apartment apartment;
 
     @Column(nullable = false)
@@ -43,11 +47,11 @@ public class Invitation {
     private String flatNumber;
 
     @Lob
-    @Column(name = "document_aadhar", columnDefinition = "TEXT")
+    @Column(name = "document_aadhar")
     private String documentAadhar;
 
     @Lob
-    @Column(name = "document_photo", columnDefinition = "TEXT")
+    @Column(name = "document_photo")
     private String documentPhoto;
 
     @Column(name = "gender", length = 20)
