@@ -5513,13 +5513,17 @@ function ColonyManagementTab({ token, showMessage, fetchDashboardData }) {
       });
       if (res.ok) {
         const data = await res.json();
-        setColonies(data);
-        if (data.length > 0 && !selectedColony) {
+        setColonies(Array.isArray(data) ? data : []);
+        if (Array.isArray(data) && data.length > 0 && !selectedColony) {
           setSelectedColony(data[0]);
           fetchBuildings(data[0].id);
         }
+      } else {
+        const errTxt = await res.text().catch(() => '');
+        console.error('Failed to fetch colonies:', res.status, errTxt);
       }
     } catch (err) {
+      console.error('Network error fetching colonies:', err);
       showMessage('error', 'Failed to fetch colonies.');
     } finally {
       setLoading(false);

@@ -461,13 +461,16 @@ public class OnboardingService {
     }
 
     public List<Apartment> getAllApartments(String adminEmail, String adminRole) {
-        boolean isCommunityAdmin = "ROLE_COMMUNITY_ADMIN".equals(adminRole) || "COMMUNITY_ADMIN".equals(adminRole);
-        if (isCommunityAdmin) {
-            User admin = userRepository.findByEmail(adminEmail).orElse(null);
-            if (admin != null && admin.getManagedApartment() != null) {
-                return List.of(admin.getManagedApartment());
+        boolean isSuperAdmin = "ROLE_ADMIN".equals(adminRole) || "ADMIN".equals(adminRole);
+        if (!isSuperAdmin) {
+            boolean isCommunityAdmin = "ROLE_COMMUNITY_ADMIN".equals(adminRole) || "COMMUNITY_ADMIN".equals(adminRole);
+            if (isCommunityAdmin) {
+                User admin = userRepository.findByEmail(adminEmail).orElse(null);
+                if (admin != null && admin.getManagedApartment() != null) {
+                    return List.of(admin.getManagedApartment());
+                }
+                return new ArrayList<>();
             }
-            return new ArrayList<>();
         }
         return apartmentRepository.findAll();
     }

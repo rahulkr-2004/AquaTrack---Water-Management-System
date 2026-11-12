@@ -177,11 +177,17 @@ public class OnboardingController {
         if (authentication == null) {
             return ResponseEntity.status(401).body("Not authenticated");
         }
-        String adminEmail = authentication.getName();
-        String adminRole = authentication.getAuthorities().stream()
-                .map(auth -> auth.getAuthority())
-                .findFirst().orElse("ROLE_USER");
-        return ResponseEntity.ok(onboardingService.getAllApartments(adminEmail, adminRole));
+        try {
+            String adminEmail = authentication.getName();
+            boolean isSuperAdmin = authentication.getAuthorities().stream()
+                    .anyMatch(a -> "ROLE_ADMIN".equals(a.getAuthority()) || "ADMIN".equals(a.getAuthority()));
+            String adminRole = isSuperAdmin ? "ROLE_ADMIN" : "ROLE_COMMUNITY_ADMIN";
+            return ResponseEntity.ok(onboardingService.getAllApartments(adminEmail, adminRole));
+        } catch (Exception e) {
+            System.err.println("Error fetching apartments: " + e.getMessage());
+            e.printStackTrace();
+            return ResponseEntity.status(500).body("Error fetching apartments: " + e.getMessage());
+        }
     }
 
     // --- 4. Get All Households ---
