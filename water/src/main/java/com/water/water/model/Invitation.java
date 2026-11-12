@@ -46,12 +46,10 @@ public class Invitation {
     @Column(name = "flat_number", nullable = false)
     private String flatNumber;
 
-    @Lob
-    @Column(name = "document_aadhar")
+    @Column(name = "document_aadhar", columnDefinition = "TEXT")
     private String documentAadhar;
 
-    @Lob
-    @Column(name = "document_photo")
+    @Column(name = "document_photo", columnDefinition = "TEXT")
     private String documentPhoto;
 
     @Column(name = "gender", length = 20)

@@ -47,12 +47,10 @@ public class User {
     @Column(nullable = false)
     private boolean approved = false;
 
-    @Lob
-    @Column(name = "document_aadhar")
+    @Column(name = "document_aadhar", columnDefinition = "TEXT")
     private String documentAadhar;
 
-    @Lob
-    @Column(name = "document_photo")
+    @Column(name = "document_photo", columnDefinition = "TEXT")
     private String documentPhoto;
 
     @Column(name = "gender", length = 20)
